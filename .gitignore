@@ -1,0 +1,62 @@
+# =============================================================================
+#  Digital Sari-Sari Store — .gitignore
+# =============================================================================
+
+# --- Python virtual environments ---------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Byte-compiled / build artifacts -----------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+.installed.cfg
+
+# --- Environment / secrets ---------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Generated data (synthesized CSVs can be regenerated; do not commit) ------
+data/csv/*.csv
+data/raw/
+data/interim/
+data/processed/
+*.parquet
+# keep the folder structure
+!data/csv/.gitkeep
+
+# --- Local PostgreSQL instance managed by pgserver ---------------------------
+.pgdata/
+
+# --- Jupyter / notebooks -----------------------------------------------------
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- Models / ML artifacts ---------------------------------------------------
+models/*.pkl
+models/*.joblib
+*.h5
+
+# --- Tooling caches ----------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.cache/
+
+# --- OS / editor cruft -------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/

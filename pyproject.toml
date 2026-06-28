@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sarisari"
+version = "0.1.0"
+description = "Digital Sari-Sari Store — data engineering, synthesis, analytics & ML on a Filipino neighborhood-store dataset."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Sari-Sari Data Project" }]
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "pandas",
+    "Faker",
+    "SQLAlchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "python-dotenv",
+    "pyarrow",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Local zero-setup PostgreSQL (bundles the server binaries; no system install / Docker needed).
+local-db = ["pgserver"]
+# Analytics & machine-learning stack for the "latter part" of the project.
+ml = ["scikit-learn", "matplotlib", "seaborn", "jupyterlab", "ipykernel"]
+
+[project.scripts]
+sarisari-synthesize = "sarisari.cli:synthesize_main"
+sarisari-load = "sarisari.cli:load_main"
+sarisari-verify = "sarisari.cli:verify_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sarisari = ["py.typed"]
