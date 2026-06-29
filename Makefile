@@ -9,6 +9,7 @@
 #   make verify     print row counts + stock/utang sanity checks
 #   make pipeline   synth + load + verify
 #   make notebook   launch JupyterLab for analytics / ML
+#   make dashboard  launch the Streamlit reporting dashboard
 #   make clean      remove generated CSVs and the local pgserver data dir
 # =============================================================================
 
@@ -16,7 +17,7 @@ VENV := .venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
 
-.PHONY: setup synth load verify pipeline notebook clean clean-csv
+.PHONY: setup synth load verify pipeline notebook dashboard clean clean-csv
 
 setup:
 	python3 -m venv $(VENV)
@@ -38,6 +39,9 @@ pipeline: synth load verify
 
 notebook:
 	$(VENV)/bin/jupyter lab
+
+dashboard:
+	$(VENV)/bin/streamlit run dashboard/app.py
 
 clean-csv:
 	rm -rf data/csv/*.csv

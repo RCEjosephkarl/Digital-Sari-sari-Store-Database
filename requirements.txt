@@ -29,3 +29,8 @@ matplotlib==3.11.0
 seaborn==0.13.2
 jupyterlab==4.6.0
 ipykernel==7.3.0
+nbformat==5.10.4
+
+# --- Reporting & data visualization (notebook + Streamlit dashboard) ---------
+streamlit==1.50.0
+plotly==6.3.0

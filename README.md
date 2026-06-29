@@ -457,6 +457,50 @@ result is correct.
 
 ---
 
+### Reporting & Visualization
+
+Once the schema is honest, the reports almost write themselves — every derived
+number already lives in a view. Two artifacts surface them, and **both read from
+exactly one query layer** so the SQL is never duplicated:
+
+```
+src/sarisari/reporting.py        # ← single source of truth for every report
+        │
+        ├──►  notebooks/01_reporting_dashboard.ipynb   (JupyterLab, Plotly inline)
+        └──►  dashboard/app.py                          (Streamlit web dashboard)
+```
+
+`reporting.py` exposes a small, composable API: a `Filters` dataclass (date
+window + product groups + brands) and a function per report that returns a tidy
+pandas `DataFrame`. Derived facts are always read from the **views**
+(`v_customer_balances`, `v_utang_ledger`, `v_product_stock`) — the reporting
+layer never re-implements balance or stock math.
+
+**The "brand" that wasn't a column.** The brief asked for a *brand* filter, but
+3NF (correctly) has no brand column — each product *name* embeds a real Filipino
+brand (*"Lucky Me Pancit Canton Original 60g"*). Rather than denormalize,
+`derive_brand()` recovers it with a curated **longest-prefix** match over the
+188-SKU catalog, so `Lucky Me Pancit Canton Original` and `Lucky Me Instant Mami
+Beef` both roll up to **Lucky Me**, while `Ginebra San Miguel Bilog` resolves to
+**Ginebra San Miguel** (not **San**). Because the product dimension is tiny, the
+brand is derived once in pandas and group/brand filters are pushed down to SQL
+as a resolved `product_id` list.
+
+Both artifacts present the same three report families:
+
+| Report | Filters | Backed by |
+|---|---|---|
+| **Sales** — revenue / units / baskets over time, by group, by brand, cash vs. credit, top SKUs | time range · group · brand · granularity (day→year) | `transactions` + `transaction_items` |
+| **Customers** — per-customer utang balance, payments, transactions & amounts, single-customer ledger drill-down with a running-balance chart | — | `v_customer_balances`, `v_utang_ledger` |
+| **Stock** — on-hand levels, reorder flags, inventory value, derived-vs-maintained reconciliation | group · brand | `v_product_stock` |
+
+The Streamlit app caches the engine (`st.cache_resource`) and every query
+(`st.cache_data`) so filter changes are instant; the notebook is parameterized by
+a single editable `Filters` block at the top. Launch with `make dashboard` /
+`make notebook`.
+
+---
+
 ### Setup and Tools
 
 #### Quick start
@@ -470,6 +514,10 @@ cp .env.example .env
 
 # 3. Run the whole pipeline:  synthesize → load → verify
 make pipeline
+
+# 4. Explore the reports:
+make notebook     # JupyterLab analytics notebook (01_reporting_dashboard.ipynb)
+make dashboard    # interactive Streamlit web dashboard
 ```
 
 **No PostgreSQL installed?** No problem. If `DATABASE_URL` is empty, the loader
@@ -505,11 +553,16 @@ DE_SariSari_Store_Inventory/
 │   ├── synthesize.py       #   ★ generates the ~676,767-row dataset → CSV
 │   ├── db.py               #   PostgreSQL connection (DATABASE_URL or pgserver)
 │   ├── loader.py           #   schema + fast COPY load + stock recompute
+│   ├── reporting.py        #   ★ shared report query layer (notebook + dashboard)
 │   └── cli.py              #   synthesize / load / verify entry points
+│
+├── dashboard/              # ★ Streamlit web reporting dashboard
+│   └── app.py              #   sales · customers · stock — interactive filters
 │
 ├── scripts/                # thin runnable wrappers around cli.py
 ├── data/csv/               # generated CSVs (gitignored)
-├── notebooks/              # analytics & ML notebooks (latter phase)
+├── notebooks/              # analytics & ML notebooks
+│   └── 01_reporting_dashboard.ipynb   # ★ live query + Plotly report notebook
 └── models/                 # trained ML artifacts (gitignored)
 ```
 
@@ -522,6 +575,7 @@ DE_SariSari_Store_Inventory/
 | Zero-install DB | pgserver | Embeds real PostgreSQL, no `sudo`, great on WSL |
 | Data synthesis | NumPy / Faker | Deterministic seeded generation |
 | Analytics | pandas, JupyterLab | Standard ML stack, `read_sql` → `get_engine()` |
+| Reporting | Streamlit, Plotly | Interactive web dashboard + inline notebook charts |
 | ML | scikit-learn, seaborn | Ready but not yet implemented |
 
 ---

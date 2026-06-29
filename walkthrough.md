@@ -1,8 +1,10 @@
 # Walkthrough: Launching the Sari-Sari Store Database
 
 This guide takes you from a fresh clone to a running PostgreSQL database with
-676,767 rows of synthesized Filipino store data — and through the normalization
-walkthrough that shows how the schema was designed.
+676,767 rows of synthesized Filipino store data, shows the **three ways to
+explore it** — raw SQL, the JupyterLab notebook, and the Streamlit dashboard
+(Section 6) — and walks through the normalization that shows how the schema was
+designed.
 
 ---
 
@@ -211,11 +213,28 @@ from scratch via `v_product_stock` must equal the trigger-maintained
 
 ---
 
-## 6. Exploring the Database
+## 6. Exploring the Project — Three Endpoints
 
-### With psql
+Once `make pipeline` has loaded the warehouse, there are **three ways to look at
+the same data**, from most raw to most visual. They all read from the identical
+PostgreSQL database — pick whichever fits what you want to do.
 
-Get your connection URL (see Section 4), then:
+| # | Endpoint | Best for | Launch |
+|---|---|---|---|
+| 1 | **Database (SQL)** | Ad-hoc queries, learning the schema, full control | `psql "$DB_URL"` |
+| 2 | **JupyterLab notebook** | Step-by-step analysis you can edit and re-run | `make notebook` |
+| 3 | **Streamlit dashboard** | Click-and-filter reports, no code needed | `make dashboard` |
+
+> All three are **read-only** views over the same tables and views — nothing you
+> do in the notebook or dashboard changes the data. The notebook and dashboard
+> share one query layer (`src/sarisari/reporting.py`), so they always agree.
+
+---
+
+### 6.1 · Endpoint 1 — The Database (SQL via `psql`)
+
+The lowest-level view: query PostgreSQL directly. Get your connection URL
+(see Section 4), then:
 
 ```bash
 # Option A (pgserver):
@@ -269,14 +288,39 @@ GROUP BY c.name
 ORDER BY revenue DESC;
 ```
 
-### With JupyterLab (analytics phase)
+---
+
+### 6.2 · Endpoint 2 — JupyterLab Notebook
 
 ```bash
 make notebook
-# Opens http://localhost:8888
+# Opens JupyterLab in your browser at http://localhost:8888
 ```
 
-Connect to the database from any notebook cell:
+In the JupyterLab **file browser** (left panel), open
+**`notebooks/01_reporting_dashboard.ipynb`**. This notebook queries the live
+database and renders the project's three reports with inline Plotly charts:
+
+1. **Sales** — revenue / units / baskets over time, by product group and by brand.
+2. **Customers** — utang (credit) balances, payments, and a per-customer ledger.
+3. **Stock** — on-hand levels, reorder flags and inventory value.
+
+**How to use it (beginner steps):**
+
+1. From the menu, choose **Run → Run All Cells** (or step through with
+   <kbd>Shift</kbd>+<kbd>Enter</kbd> from the top).
+2. Find the cell titled **"1 · Filters"** near the top and edit the variables —
+   every chart below reacts to them:
+   ```python
+   START      = lo               # or e.g. date(2020, 1, 1)
+   END        = hi
+   CATEGORIES = ["Liquor"]       # one or more of the 6 groups; [] = all
+   BRANDS     = ["Tanduay"]      # specific brands; [] = all
+   FREQ       = "Monthly"        # Daily | Weekly | Monthly | Quarterly | Yearly
+   ```
+3. Re-run the cells below to refresh the charts with your new slice.
+
+You can also write your own query in any empty cell:
 
 ```python
 import pandas as pd
@@ -286,6 +330,48 @@ engine = get_engine()
 df = pd.read_sql("SELECT * FROM v_customer_balances ORDER BY balance DESC", engine)
 df.head(10)
 ```
+
+Stop the notebook server with <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal.
+
+---
+
+### 6.3 · Endpoint 3 — Streamlit Dashboard
+
+```bash
+make dashboard
+# Opens the dashboard in your browser at http://localhost:8501
+```
+
+The most beginner-friendly view — a point-and-click web app, **no code required**.
+If a browser tab does not open automatically, copy the **Local URL** Streamlit
+prints in the terminal (usually `http://localhost:8501`) into your browser.
+
+**Sidebar (left) — global filters** that apply to every chart:
+
+- **Time range** — a quick preset (All time / Last 12 months / Year to date / …)
+  or a custom date picker.
+- **Granularity** — how the time charts are bucketed (Daily → Yearly).
+- **Product group** — restrict to one or more of the 6 groups.
+- **Brand** — restrict to specific Filipino brands (the list narrows to whatever
+  groups you picked).
+
+**Three tabs (top) — one per report:**
+
+- **📈 Sales** — headline KPIs, a revenue trend you can switch to units or
+  transactions, revenue by group, the cash-vs-credit split, and the top brands
+  and products.
+- **👥 Customers** — total outstanding utang and the top debtors; open the
+  **🔍 Single customer** sub-tab to pick a customer and see their running-balance
+  ledger and recent transactions.
+- **📦 Stock** — inventory value by group, the lowest-stock items, and a full
+  stock table with optional *reorder-only* and *derived-vs-maintained drift*
+  toggles.
+
+Most tables have a **⬇️ Download CSV** button. Stop the dashboard with
+<kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal.
+
+> **WSL tip:** if `http://localhost:8501` will not load from a Windows browser,
+> try the **Network URL** Streamlit prints, or `http://127.0.0.1:8501`.
 
 ---
 

@@ -25,7 +25,9 @@ dependencies = [
 # Local zero-setup PostgreSQL (bundles the server binaries; no system install / Docker needed).
 local-db = ["pgserver"]
 # Analytics & machine-learning stack for the "latter part" of the project.
-ml = ["scikit-learn", "matplotlib", "seaborn", "jupyterlab", "ipykernel"]
+ml = ["scikit-learn", "matplotlib", "seaborn", "jupyterlab", "ipykernel", "nbformat"]
+# Reporting & data visualization: the analytics notebook + Streamlit dashboard.
+viz = ["streamlit", "plotly"]
 
 [project.scripts]
 sarisari-synthesize = "sarisari.cli:synthesize_main"
