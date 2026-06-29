@@ -7,12 +7,18 @@
 #      ./.venv/bin/pip install -r requirements.txt
 #      ./.venv/bin/pip install -e .          # install the `sarisari` package
 #
-#  (or simply: `make setup`)
+#  ...or, much faster, with uv (https://docs.astral.sh/uv/):
+#
+#      uv venv .venv
+#      uv pip install --python .venv/bin/python -r requirements.txt
+#      uv pip install --python .venv/bin/python -e . --no-deps
+#
+#  (or simply: `make setup` — auto-detects uv and falls back to pip)
 # -----------------------------------------------------------------------------
 
 # --- Data engineering: synthesis, CSV, PostgreSQL load -----------------------
 numpy==2.5.0
-pandas==3.0.3
+pandas==2.3.3
 Faker==40.23.0
 SQLAlchemy==2.0.51
 psycopg[binary]==3.3.4

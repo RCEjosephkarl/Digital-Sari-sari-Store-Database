@@ -33,30 +33,39 @@ git clone https://github.com/RCEjosephkarl/DE_SariSari_Store_Inventory.git
 cd DE_SariSari_Store_Inventory
 ```
 
-Create and activate a virtual environment:
-
-```bash
-# Linux / macOS / WSL
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Windows (PowerShell)
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-Install all dependencies (pins exact versions for reproducibility):
+Create the environment and install all dependencies (pins exact versions for
+reproducibility). `make setup` builds the `.venv` for you — it auto-detects
+[uv](https://docs.astral.sh/uv/) for a 10–100× faster install and falls back to
+`python3 -m venv` + `pip` when uv isn't installed:
 
 ```bash
 make setup
-# equivalent to:
-#   pip install -r requirements.txt
-#   pip install -e . --no-deps
 ```
 
-If `make` is unavailable (Windows without Git Bash):
+Then activate the environment:
 
 ```bash
+# Linux / macOS / WSL
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+```
+
+**Prefer uv explicitly?** Install it once (`curl -LsSf https://astral.sh/uv/install.sh | sh`,
+or `pip install uv`), and `make setup` will use it automatically. The equivalent
+manual commands are:
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+uv pip install --python .venv/bin/python -e . --no-deps
+```
+
+If `make` is unavailable (Windows without Git Bash), run the pip path directly:
+
+```bash
+python -m venv .venv
 pip install -r requirements.txt
 pip install -e . --no-deps
 ```

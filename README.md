@@ -506,7 +506,10 @@ a single editable `Filters` block at the top. Launch with `make dashboard` /
 #### Quick start
 
 ```bash
-# 1. Create the reproducible environment (.venv) and install everything
+# 1. Create the reproducible environment (.venv) and install everything.
+#    `make setup` auto-detects uv (https://docs.astral.sh/uv/) for a 10-100x
+#    faster install and transparently falls back to python3 venv + pip if uv
+#    isn't on PATH — no flags to remember.
 make setup
 
 # 2. (optional) configure — defaults work out of the box
