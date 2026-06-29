@@ -70,13 +70,83 @@ production pipeline in the same database without conflict.
 #### The raw starting point (3 tables)
 
 The three raw tables simulate what a store owner produces when they type their
-notebooks directly into a spreadsheet, column by column:
+notebooks directly into a spreadsheet, column by column.
+
+**`raw_inventory` — 15 rows (the *presyo* notebook)**
+
+| product_name | category | selling_price | stock_count | supplier_name | supplier_phone | alt_suppliers |
+|---|---|---|---|---|---|---|
+| Nescafé 3-in-1 Original 20g | Beverages | 8.00 | 175 | Nestlé Philippines Dealer | 09221330003 | NULL |
+| Milo 24g | Beverages | 9.00 | 143 | **Nestlé Philippines Dealer** | **09221330003** | NULL |
+| Maggi Magic Sarap 8g | Meal Ingredients | 5.00 | 210 | Nestlé Philippines Dealer | 09221330003 | Divisoria Wholesale Center |
+| **Maggi Magic Sarap 8g** | Meal Ingredients | **4.50** | 210 | **Divisoria Wholesale Center** | 09331440004 | NULL |
+| Lucky Me Pancit Canton 80g | Snacks | 14.00 | 189 | Monde Nissin Distributor | 09441550005 | **Monde Nissin Distributor;Suy Sing Commercial Corporation** |
+
+Violations: Maggi appears **twice** with no primary key to distinguish the rows; `supplier_phone` copies identically across every Nestlé product row (2NF); `alt_suppliers` packs two supplier names into one semicolon-delimited cell (1NF); `stock_count` for Argentina Corned Beef reads 99 in the notebook but the actual tally is 87 (3NF).
+
+**`raw_sales_ledger` — 10 rows (the *utang* notebook)**
+
+| sale_date | customer_name | customer_balance | payment_type | item1_name | item2_name | item3_name | total_amount |
+|---|---|---|---|---|---|---|---|
+| 2025-01-15 | Aling Maria | **0.00** | credit | Coca-Cola Mismo 300ml | Datu Puti Soy Sauce 385ml | NULL | 71.00 |
+| 2025-01-15 | Aling Maria | **0.00** | credit | Maggi Magic Sarap 8g | NULL | NULL | 15.00 |
+| 2025-01-17 | Mang Jose | 0.00 | credit | Lucky Me Pancit Canton 80g | 555 Sardines Tomato 155g | **Milo 24g** | 76.00 |
+| 2025-01-18 | Aling Maria | **50.00** | credit | Tide Powder Detergent 66g | NULL | NULL | 20.00 |
+
+Violations: Aling Maria's `customer_balance` is 0.00 on two consecutive credit rows, then jumps to 50.00 by the third — the notebook was updated between customers but earlier rows were never corrected (3NF). Mang Jose's sale hits all three item columns, maxing out the hard cap baked into the schema (1NF). `total_amount` can always be derived from quantities × prices, yet it is stored alongside those values (3NF).
+
+**`raw_delivery_log` — 12 rows (delivery receipts)**
+
+| reference_no | supplier_name | supplier_phone | product_name | product_category | qty_received | unit_cost | line_total |
+|---|---|---|---|---|---|---|---|
+| DR-2025-001 | Coca-Cola FEMSA Route Agent | 09171110001 | Coca-Cola Mismo 300ml | Beverages | 120 | 16.00 | **1920.00** |
+| DR-2025-001 | **Coca-Cola FEMSA Route Agent** | **09171110001** | Sprite Mismo 300ml | **Beverages** | 96 | 14.50 | **1392.00** |
+| DR-2025-002 | Nestlé Philippines Dealer | 09221330003 | Nescafé 3-in-1 Original 20g | **Beverages** | 200 | 6.00 | **1200.00** |
+| DR-2025-002 | **Nestlé Philippines Dealer** | **09221330003** | Milo 24g | **Beverages** | 180 | 7.00 | **1260.00** |
+
+Violations: a single delivery (DR-2025-001) repeats Coca-Cola FEMSA's full contact block on every product line (2NF); `product_category` is a fact about the product, not this delivery, and would need to be copied every time the product is restocked (3NF); `line_total` equals `qty_received × unit_cost` and is stored redundantly (3NF).
+
+**Violations at a glance**
 
 | Table | Violations illustrated |
 |---|---|
 | `raw_inventory` | No PK (Maggi appears twice); `alt_suppliers` packed into one semicolon-separated cell [1NF]; supplier contact info repeated per product [2NF]; `category_desc` depends on `category` not product [3NF]; `stock_count` goes stale [3NF] |
 | `raw_sales_ledger` | No PK; `item1_/item2_/item3_` repeating groups hard-limit 3 items per sale [1NF]; `customer_balance` hand-written and stale across rows [3NF]; `total_amount` stored despite being a sum [3NF] |
 | `raw_delivery_log` | No PK; supplier contact info repeated per delivery line [2NF]; `product_category/unit` depend on the product not the delivery [3NF]; `line_total` stored despite being qty × cost [3NF] |
+
+```mermaid
+erDiagram
+    raw_inventory {
+        TEXT product_name "NO PK — duplicates silently accepted"
+        TEXT category
+        TEXT category_desc "3NF — depends on category, not product"
+        TEXT unit_label "3NF — depends on unit_code, not product"
+        NUMERIC selling_price
+        INT stock_count "3NF — hand-calculated, goes stale"
+        TEXT supplier_name "2NF — repeats on every product row"
+        TEXT supplier_phone "2NF — repeats on every product row"
+        TEXT alt_suppliers "1NF — semicolon-packed multi-value cell"
+    }
+    raw_sales_ledger {
+        DATE sale_date "NO PK"
+        TEXT customer_name
+        TEXT customer_phone "3NF — depends on customer, not the sale"
+        NUMERIC customer_balance "3NF — derived running total, goes stale"
+        TEXT item1_name "1NF — repeating group position 1"
+        TEXT item2_name "1NF — repeating group position 2"
+        TEXT item3_name "1NF — repeating group position 3 (hard cap)"
+        NUMERIC total_amount "3NF — derived sum, stored anyway"
+    }
+    raw_delivery_log {
+        TEXT reference_no "NO PK"
+        TEXT supplier_name "2NF — repeats per product line"
+        TEXT supplier_phone "2NF — repeats per product line"
+        TEXT product_name
+        TEXT product_category "3NF — depends on product, not delivery"
+        TEXT product_unit "3NF — depends on product, not delivery"
+        NUMERIC line_total "3NF — derived (qty × cost)"
+    }
+```
 
 #### 1NF — atomic values and row identity
 
@@ -91,6 +161,58 @@ Every column holds one atomic value; every row has a unique identifier.
 
 **Table count: 3 → 5.**
 
+```mermaid
+erDiagram
+    nf1_inventory {
+        INT product_id PK
+        TEXT product_name
+        TEXT category "still transitive on category_desc — 3NF to fix"
+        TEXT supplier_name "still repeats per product — 2NF to fix"
+        NUMERIC selling_price
+        INT stock_count "still stale — 3NF to fix"
+    }
+    nf1_product_alt_suppliers {
+        INT product_id FK
+        TEXT alt_supplier_name "atomic — 1NF fixed"
+    }
+    nf1_sales_header {
+        INT sale_id PK
+        DATE sale_date
+        TEXT customer_name "still partial dep on phone/nickname — 2NF to fix"
+        NUMERIC customer_balance "still stored derived — 3NF to fix"
+        TEXT payment_type
+        NUMERIC total_amount "still stored derived — 3NF to fix"
+    }
+    nf1_sales_items {
+        INT item_id PK
+        INT sale_id FK
+        TEXT product_name
+        INT qty
+        NUMERIC unit_price
+    }
+    nf1_delivery_log {
+        INT delivery_item_id PK
+        DATE delivery_date
+        TEXT reference_no
+        TEXT supplier_name "still repeats per line — 2NF to fix"
+        TEXT product_name
+        TEXT product_category "still transitive — 3NF to fix"
+        NUMERIC line_total "still stored derived — 3NF to fix"
+    }
+
+    nf1_inventory ||--o{ nf1_product_alt_suppliers : "alt suppliers"
+    nf1_sales_header ||--o{ nf1_sales_items : "contains"
+```
+
+**What was solved?**
+
+- Every row now has a unique identifier — surrogate PKs added to all three tables.
+- `alt_suppliers`, the semicolon-packed multi-value cell, is gone; each alternate supplier becomes its own row in `nf1_product_alt_suppliers` (one row per value, zero hacks).
+- The `item1_`/`item2_`/`item3_` repeating groups are eliminated: 10 header rows expand into 24 item rows in `nf1_sales_items`, with no NULLs and no 3-item ceiling.
+- `nf1_delivery_log` receives only a PK — it was already atomic, so no structural split was needed here.
+
+**Still unresolved:** supplier contact info repeats across every product and delivery row (2NF); customer phone and nickname travel with every sale (2NF); `customer_balance`, `total_amount`, and `line_total` are still stored derived values (3NF).
+
 #### 2NF — remove partial dependencies
 
 No non-key attribute may depend on only *part* of the natural composite key.
@@ -104,6 +226,73 @@ No non-key attribute may depend on only *part* of the natural composite key.
 - `nf2_products` and `nf2_sales` rebuilt to reference the new tables by FK.
 
 **Table count: 5 → 7.**
+
+```mermaid
+erDiagram
+    nf2_suppliers {
+        INT supplier_id PK
+        TEXT supplier_name
+        TEXT supplier_contact
+        TEXT supplier_phone
+        TEXT supplier_address
+    }
+    nf2_products {
+        INT product_id PK
+        INT supplier_id FK
+        TEXT product_name
+        TEXT category "still transitive — 3NF to fix"
+        NUMERIC selling_price
+        INT stock_count "still stale — 3NF to fix"
+    }
+    nf2_customers {
+        INT customer_id PK
+        TEXT customer_name
+        TEXT customer_phone
+        TEXT customer_nickname
+        NUMERIC customer_balance "still stored derived — 3NF to fix"
+    }
+    nf2_sales {
+        INT sale_id PK
+        INT customer_id FK
+        DATE sale_date
+        TEXT payment_type
+        NUMERIC total_amount "still stored derived — 3NF to fix"
+    }
+    nf2_sale_items {
+        INT item_id PK
+        INT sale_id FK
+        TEXT product_name "text ref, no FK yet — 3NF to fix"
+        INT qty
+        NUMERIC unit_price
+    }
+    nf2_deliveries {
+        INT delivery_id PK
+        INT supplier_id FK
+        DATE delivery_date
+        TEXT reference_no
+    }
+    nf2_delivery_items {
+        INT delivery_item_id PK
+        INT delivery_id FK
+        TEXT product_name "text ref, no FK yet — 3NF to fix"
+        TEXT product_category "still transitive — 3NF to fix"
+        NUMERIC line_total "still stored derived — 3NF to fix"
+    }
+
+    nf2_suppliers ||--o{ nf2_products : "supplies"
+    nf2_suppliers ||--o{ nf2_deliveries : "delivers to"
+    nf2_customers ||--o{ nf2_sales : "makes"
+    nf2_sales ||--o{ nf2_sale_items : "contains"
+    nf2_deliveries ||--o{ nf2_delivery_items : "has"
+```
+
+**What was solved?**
+
+- Supplier contact info (contact name, phone, address) now lives in exactly one row in `nf2_suppliers`; changing Nestlé's phone number is 1 UPDATE instead of 7+ scattered across product and delivery rows.
+- Customer identity (phone, nickname) is extracted to `nf2_customers`; one customer maps to one row, referenced by FK wherever sales need it.
+- The delivery log is formally split into a **header** (`nf2_deliveries` — one row per receipt) and **line items** (`nf2_delivery_items` — one row per product), making the structure that was implicit in the flat log explicit and enforceable.
+
+**Still unresolved:** `category_desc` and `unit_label` are still attributes of their parent concept, not of the product (3NF); `customer_balance`, `total_amount`, and `line_total` remain stored derived values (3NF); product names in sale and delivery items are still free-text columns with no FK constraint (3NF).
 
 #### 3NF — remove transitive dependencies and stored derivations
 
@@ -127,7 +316,103 @@ ledgers.
 - **`v_product_stock`** and **`v_customer_balances`** created as views: they
   replace every stored derived value with a computation that is always correct.
 
+```mermaid
+erDiagram
+    categories {
+        INT category_id PK
+        TEXT name
+        TEXT description
+    }
+    units {
+        INT unit_id PK
+        TEXT code
+        TEXT name
+    }
+    suppliers {
+        INT supplier_id PK
+        TEXT name
+        TEXT contact_person
+        TEXT phone
+        TEXT address
+    }
+    products {
+        INT product_id PK
+        INT category_id FK
+        INT unit_id FK
+        TEXT name
+        NUMERIC current_price
+        INT reorder_level
+    }
+    customers {
+        INT customer_id PK
+        TEXT full_name
+        TEXT nickname
+        TEXT phone
+    }
+    credit_payments {
+        INT payment_id PK
+        INT customer_id FK
+        NUMERIC amount
+        DATE payment_date
+    }
+    transactions {
+        INT transaction_id PK
+        INT customer_id FK
+        DATE transaction_date
+        TEXT payment_type
+    }
+    transaction_items {
+        INT transaction_item_id PK
+        INT transaction_id FK
+        INT product_id FK
+        INT quantity
+        NUMERIC unit_price "snapshot — price at time of sale"
+    }
+    restocks {
+        INT restock_id PK
+        INT supplier_id FK
+        DATE restock_date
+        TEXT reference_no
+    }
+    restock_items {
+        INT restock_item_id PK
+        INT restock_id FK
+        INT product_id FK
+        INT quantity
+        NUMERIC unit_cost "snapshot — cost at time of delivery"
+    }
+
+    categories ||--o{ products : "classifies"
+    units ||--o{ products : "measures"
+    suppliers ||--o{ restocks : "delivers"
+    customers ||--o{ transactions : "makes"
+    customers ||--o{ credit_payments : "pays"
+    transactions ||--o{ transaction_items : "contains"
+    restocks ||--o{ restock_items : "has"
+    products ||--o{ transaction_items : "sold in"
+    products ||--o{ restock_items : "restocked in"
+```
+
+**What was solved?**
+
+- `category_desc` and `unit_label` each live in their own tables (`categories`, `units`) — no two product rows can disagree on what "Snacks" means or what "sachet" is called.
+- `products.stock_count` is dropped entirely; `customers.customer_balance` is dropped entirely. Both are replaced by views (`v_product_stock`, `v_customer_balances`) that compute the correct answer from live data on every query — no staleness possible.
+- `total_amount` and `line_total` are removed; they are `SUM()` calls, not facts that belong in a row.
+- `credit_payments` becomes a first-class entity — previously invisible in the raw notebook (only its net effect on the stale balance column was recorded); 3NF surfaces it as a distinct fact: who paid, how much, when.
+- All free-text product name references in sale and delivery line items are replaced by `product_id` FKs — a typo in a product name is now impossible at the row level.
+
 **Final: 10 tables + 2 views — structurally identical to `schema.sql`.**
+
+#### The journey in brief
+
+| Stage | Tables | Key transformation | Anomalies eliminated |
+|---|---:|---|---|
+| Raw | 3 | Direct notebook transcription | — |
+| 1NF | 5 | PKs added; repeating groups unnested; multi-value cells split | Duplicate-row ambiguity; 3-item sale cap; non-atomic `alt_suppliers` |
+| 2NF | 7 | Supplier & customer info extracted; delivery header/line split | Supplier contact repeated per row; customer info scattered across sales |
+| 3NF | 10 + 2 views | Transitive deps extracted; stored derivations replaced by views; text refs → FKs | Stale stock count; stale customer balance; wrong sale totals; product-name typos |
+
+**One rule, consistently applied:** a fact lives in exactly one place — and derived facts are never stored at all.
 
 ---
 
